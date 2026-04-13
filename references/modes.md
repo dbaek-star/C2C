@@ -13,24 +13,23 @@
 ## [1] 1 Round
 
 ```
-Claude 초안 → Gemini 검토 → Claude 판단 → 최종본
+Claude 초안 → Claude-B 검토 → Claude 판단 → 최종본
 ```
 
 | 순서 | 파일명 | 주체 | 내용 |
 |------|--------|------|------|
 | 1 | `round1_1_claude_draft.md` | Claude | 초안 (WebSearch 포함) |
-| 2 | `round1_2_gemini_review.md` | Gemini | 검토 |
+| 2 | `round1_2_claude-b_review.md` | Claude-B | 검토 |
 | 3 | `round1_3_claude_decision.md` | Claude | 판단 |
 | 4 | `collab_final.md` | Claude | 최종본 |
 | 5 | `collab_summary.md` | Claude | 요약 |
 
-Gemini 호출: 1회
+서브에이전트 호출: 1회
 
 ### 수행 절차
 
 1. Claude WebSearch 조사 후 초안 → `round1_1_claude_draft.md`
-2. Gemini 호출 (자율 프롬프트) → `round1_2_gemini_review.md`
-   - session_id 기록. fallback, web_searched 확인.
+2. Agent tool로 Claude-B 호출 (자율 프롬프트) → `round1_2_claude-b_review.md`
 3. Claude 판단 (동의/반박/부분동의) → `round1_3_claude_decision.md`
 4. 최종본 → `collab_final.md`
 
@@ -39,27 +38,27 @@ Gemini 호출: 1회
 ## [2] 2 Round (기본값)
 
 ```
-Claude 초안 → Gemini 검토 → Claude 판단·수정 → Gemini 재검토 → Claude 최종 판단 → 최종본
+Claude 초안 → Claude-B 검토 → Claude 판단·수정 → Claude-B 재검토 → Claude 최종 판단 → 최종본
 ```
 
 | 순서 | 파일명 | 주체 | 내용 |
 |------|--------|------|------|
 | 1 | `round1_1_claude_draft.md` | Claude | 초안 |
-| 2 | `round1_2_gemini_review.md` | Gemini | 1차 검토 |
+| 2 | `round1_2_claude-b_review.md` | Claude-B | 1차 검토 |
 | 3 | `round1_3_claude_decision.md` | Claude | 판단 + 수정 내용 포함 |
-| 4 | `round2_1_gemini_review.md` | Gemini | 2차 검토 |
+| 4 | `round2_1_claude-b_review.md` | Claude-B | 2차 검토 |
 | 5 | `round2_2_claude_decision.md` | Claude | 최종 판단 |
 | 6 | `collab_final.md` | Claude | 최종본 |
 | 7 | `collab_summary.md` | Claude | 요약 |
 
-Gemini 호출: 2회
+서브에이전트 호출: 2회
 
 ### 수행 절차
 
 1. Claude WebSearch 조사 후 초안 → `round1_1_claude_draft.md`
-2. Gemini 호출 → `round1_2_gemini_review.md` (session_id 기록)
+2. Agent tool로 Claude-B 호출 → `round1_2_claude-b_review.md`
 3. Claude 판단 + 수정 내용 포함 → `round1_3_claude_decision.md`
-4. Gemini 재검토 (--resume session_id, --context round1_1, round1_2) → `round2_1_gemini_review.md`
+4. Agent tool로 Claude-B 재검토 (prompt에 초안 + 이전 리뷰 포함) → `round2_1_claude-b_review.md`
 5. Claude 최종 판단 → `round2_2_claude_decision.md`
 6. 최종본 → `collab_final.md`
 
@@ -68,15 +67,15 @@ Gemini 호출: 2회
 ## [3] Adaptive Round (최대 5라운드)
 
 ```
-Claude 초안 → [Gemini 검토 → Claude 판단·수정] × N → 최종본
+Claude 초안 → [Claude-B 검토 → Claude 판단·수정] × N → 최종본
 ```
 
 [2]와 동일 패턴을 반복. 파일명: `roundN_M_주체_유형.md`
 
-Gemini 호출: 1~5회
+서브에이전트 호출: 1~5회
 
 **종료 조건**:
-- Gemini 추가 지적 없음 → 합의
+- Claude-B 추가 지적 없음 → 합의
 - Claude가 모든 피드백에 동의 완료 → 합의
 - 5라운드 도달 → 강제 종료, 그 시점 합의사항 기반 최종본
 
@@ -84,37 +83,42 @@ Gemini 호출: 1~5회
 
 1. [2]와 동일 패턴으로 시작.
 2. 매 라운드 종료 시 합의 판정:
-   - Gemini 추가 지적 없음 또는 Claude 전체 동의 → 합의 → 최종본
-   - 미합의 → 다음 라운드 (--resume으로 세션 유지)
+   - Claude-B 추가 지적 없음 또는 Claude 전체 동의 → 합의 → 최종본
+   - 미합의 → 다음 라운드 (이전 라운드 컨텍스트를 prompt에 포함)
 3. 5라운드 도달 시 강제 종료 → 그 시점 합의사항 기반 최종본.
 
 `collab_summary.md`에 총 라운드 수, 합의/강제종료 여부 기록.
 
 ---
 
-## [4] Devil's Advocate (무제한)
+## [4] Devil's Advocate (최대 10라운드, 연장 가능)
 
-debater-debater 구조. 한쪽이 명시적 패배를 선언할 때까지 무한 지속.
+debater-debater 구조. 한쪽이 명시적 패배를 선언할 때까지 지속.
 
 ```
-Claude 주장 → Gemini 반박 → Claude 재반박 → ... → 패배 선언
+Claude 주장 → Claude-B 반박 → Claude 재반박 → ... → 패배 선언
 ```
 
 | 순서 | 파일명 패턴 | 주체 | 내용 |
 |------|------------|------|------|
 | 1 | `round1_1_claude_argument.md` | Claude | 초기 주장 |
-| 2 | `round1_2_gemini_counter.md` | Gemini | 반박 |
+| 2 | `round1_2_claude-b_counter.md` | Claude-B | 반박 |
 | 3+ | `roundN_M_주체_rebuttal.md` | 교대 | 패배 선언 시까지 반복 |
 | 최종 | `roundN_surrender_loser.md` | 패배자 | 패배 선언 |
 
 **페르소나 규칙**:
 - **Claude**: 상대 약점을 논리적으로 공격. 근거 없는 주장 즉시 지적. 반박 불가능 시만 패배 인정.
-- **Gemini 프롬프트에 포함**: "상대 주장에 매우 비판적으로 반응하라. 논리적 허점·근거 부족·대안적 해석을 적극 제시하라. 반박 불가능 시 반드시 '패배를 인정합니다'라고 명시 선언하라."
+- **Claude-B prompt에 포함**: "상대 주장에 매우 비판적으로 반응하라. 논리적 허점·근거 부족·대안적 해석을 적극 제시하라. 반박 불가능 시 반드시 '패배를 인정합니다'라고 명시 선언하라."
 
 **종료 조건** (하나만 발생):
-- Gemini 응답에 "패배를 인정합니다" 포함 → Gemini 패배, 즉시 종료
+- Claude-B 응답에 "패배를 인정합니다" 포함 → Claude-B 패배, 즉시 종료
 - Claude가 "패배를 인정합니다" 선언 → Claude 패배, 즉시 종료
 - 패배 선언 없으면 다음 라운드 계속 (임의 승패 결정 금지)
+
+**하드 리밋**:
+- **10라운드 도달 시**: AskUserQuestion으로 "10라운드에 도달했습니다. 계속 진행하시겠습니까?" 확인
+- 사용자 승인 시 추가 10라운드 허용 (다시 10라운드 도달 시 재확인)
+- 사용자 거부 시 그 시점까지의 논의 기반으로 최종본 생성
 
 **패배 선언 형식**:
 ```
@@ -123,13 +127,13 @@ Claude 주장 → Gemini 반박 → Claude 재반박 → ... → 패배 선언
 [패배 사유 설명]
 ```
 
-**최종본**: 패배 선언이 있어야만 `collab_final.md` 생성. 승자 논리 중심으로 작성.
+**최종본**: 패배 선언이 있어야만 `collab_final.md` 생성. 승자 논리 중심으로 작성. 하드 리밋으로 종료 시 양측 논거를 균형 있게 정리.
 
 ### 수행 절차
 
 1. Claude 초기 주장 → `round1_1_claude_argument.md`
-2. 루프: Gemini 반박 → 패배 감지 → Claude 재반박 → 패배 감지 → 반복
-   - 각 Gemini 호출에 `--resume SESSION_ID` 사용
+2. 루프: Agent tool로 Claude-B 반박 → 패배 감지 → Claude 재반박 → 패배 감지 → 반복
+   - 각 Claude-B 호출 시 이전 라운드 컨텍스트를 prompt에 포함
 3. 패배 선언 감지 시 → `collab_final.md` 생성 (승자 논리 중심)
 
 `collab_summary.md`에 총 라운드 수, 승패, 핵심 논점, 패배 선언 라운드 기록.
